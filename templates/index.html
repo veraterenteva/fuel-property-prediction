@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fuel AI Designer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="container">
+
+    <h1>🚀 Fuel AI Designer</h1>
+
+    <div class="card">
+        <h2>Forward Prediction</h2>
+
+        <form action="/predict" method="post">
+            <label>SMILES:</label>
+            <input name="smiles" placeholder="e.g. CCO">
+
+            <label>Blend (JSON):</label>
+            <textarea name="blend" placeholder='[{"smiles":"CCO","fraction":0.5},{"smiles":"CCCC","fraction":0.5}]'></textarea>
+
+            <button type="submit">Predict</button>
+        </form>
+
+        {% if forward_result %}
+        <div class="result">
+            <h3>Result:</h3>
+            <p>Octane: {{ forward_result.octane_number }}</p>
+            <p>Cetane: {{ forward_result.cetane_number }}</p>
+            <p>Flash Point: {{ forward_result.flash_point }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+
+    <div class="card">
+        <h2>Inverse Design</h2>
+
+        <form action="/inverse" method="post">
+            <label>Octane:</label>
+            <input name="octane" type="number" step="0.1">
+
+            <label>Cetane:</label>
+            <input name="cetane" type="number" step="0.1">
+
+            <label>Flash Point:</label>
+            <input name="flash_point" type="number" step="0.1">
+
+            <button type="submit">Generate Mixture</button>
+        </form>
+
+        {% if inverse_result %}
+        <div class="result">
+            <h3>Suggested Blend:</h3>
+
+            <ul>
+                {% for comp in inverse_result.blend %}
+                <li>{{ comp.smiles }} — {{ comp.fraction }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+</body>
+</html>
