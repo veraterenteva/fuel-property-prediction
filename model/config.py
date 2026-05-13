@@ -1,0 +1,32 @@
+
+SEED = 42
+
+# SMILES Encoder parameters
+SMILES_EMBEDDING_DIM = 256
+SMILES_HIDDEN_DIMS = [256, 64, 16]
+SMILES_DROPOUT = 0
+SMILES_LINEAR_OUTPUT_DIM = 12
+
+# Descriptor Encoder parameters
+TOP_N_DESCRIPTORS = 100 # Number of top RDKit descriptors to use
+DESCRIPTOR_INPUT_DIM = TOP_N_DESCRIPTORS
+DESCRIPTOR_HIDDEN_DIM1 = 128
+DESCRIPTOR_HIDDEN_DIM2 = 64
+DESCRIPTOR_OUTPUT_DIM = 12
+
+# Predictor parameters
+PREDICTOR_HIDDEN_DIM1 = 1048
+PREDICTOR_HIDDEN_DIM2 = 512
+PREDICTOR_HIDDEN_DIM3 = 12
+OUTPUT_DIM = 2 # MON and RON as targets
+
+# Training parameters
+BATCH_SIZE = 64
+LEARNING_RATE = 0.001
+N_EPOCHS = 3
+L2_REG_LAMBDA = 0.0001
+L1_REG_LAMBDA = 0.0
+PATIENCE = 200 # For early stopping
+
+# Data splitting
+SPLIT_RANDOM = False # If True, splits data randomly; otherwise uses 'Dataset' column
