@@ -155,6 +155,7 @@ def preprocess_data(df_mix, df_pure_components, all_smiles_in_mix, selected_desc
     # Fill NaN values with 0.0, and the training loop will mask these out.
     df_mix['MON'] = pd.to_numeric(df_mix['MON'], errors='coerce').fillna(0.0)
     df_mix['RON'] = pd.to_numeric(df_mix['RON'], errors='coerce').fillna(0.0)
+    df_mix['CN'] = pd.to_numeric(df_mix['CN'], errors='coerce').fillna(0.0)
 
     if split_random:
         all_blend_indices = np.arange(len(df_mix))

@@ -65,6 +65,10 @@ def evaluate_model(model, data_loader, device, split_random, seed, l2_reg_lambda
     actuals_ron = actuals_full[ron_present_mask, 1]
     predictions_ron = predictions_full[ron_present_mask, 1]
 
+    cn_present_mask = masks_full[:, 2]
+    actuals_cn = actuals_full[cn_present_mask, 2]
+    predictions_cn = predictions_full[cn_present_mask, 2]
+
     # Calculate metrics for MON
     r2_mon = r2_score(actuals_mon, predictions_mon) if actuals_mon.shape[0] > 0 else np.nan
     mae_mon = mean_absolute_error(actuals_mon, predictions_mon) if actuals_mon.shape[0] > 0 else np.nan
@@ -75,9 +79,14 @@ def evaluate_model(model, data_loader, device, split_random, seed, l2_reg_lambda
     mae_ron = mean_absolute_error(actuals_ron, predictions_ron) if actuals_ron.shape[0] > 0 else np.nan
     mape_ron = mean_absolute_percentage_error(actuals_ron, predictions_ron) * 100 if actuals_ron.shape[0] > 0 else np.nan
 
-    # For overall metrics, concatenate the valid MON and RON values
-    actuals_overall_valid = np.concatenate((actuals_mon, actuals_ron)) if (actuals_mon.shape[0] > 0 or actuals_ron.shape[0] > 0) else np.array([])
-    predictions_overall_valid = np.concatenate((predictions_mon, predictions_ron)) if (predictions_mon.shape[0] > 0 or predictions_ron.shape[0] > 0) else np.array([])
+    # Calculate metrics for CN
+    r2_cn = r2_score(actuals_cn, predictions_cn) if actuals_cn.shape[0] > 0 else np.nan
+    mae_cn = mean_absolute_error(actuals_cn, predictions_cn) if actuals_cn.shape[0] > 0 else np.nan
+    mape_cn = mean_absolute_percentage_error(actuals_cn, predictions_cn) * 100 if actuals_cn.shape[0] > 0 else np.nan
+
+    # For overall metrics, concatenate the valid MON, RON, and CN values
+    actuals_overall_valid = np.concatenate((actuals_mon, actuals_ron, actuals_cn)) if (actuals_mon.shape[0] > 0 or actuals_ron.shape[0] > 0 or actuals_cn.shape[0] > 0) else np.array([])
+    predictions_overall_valid = np.concatenate((predictions_mon, predictions_ron, predictions_cn)) if (predictions_mon.shape[0] > 0 or predictions_ron.shape[0] > 0 or predictions_cn.shape[0] > 0) else np.array([])
 
     r2_overall = r2_score(actuals_overall_valid, predictions_overall_valid) if actuals_overall_valid.shape[0] > 0 else np.nan
     mae_overall = mean_absolute_error(actuals_overall_valid, predictions_overall_valid) if actuals_overall_valid.shape[0] > 0 else np.nan
@@ -85,25 +94,31 @@ def evaluate_model(model, data_loader, device, split_random, seed, l2_reg_lambda
 
     print(f"R2 score on the validation set for MON: {r2_mon:.4f}")
     print(f"R2 score on the validation set for RON: {r2_ron:.4f}")
+    print(f"R2 score on the validation set for CN: {r2_cn:.4f}")
     print(f"Average R2 score on the validation set: {r2_overall:.4f}")
 
     print(f"\nMAE score on the validation set for MON: {mae_mon:.4f}")
     print(f"MAE score on the validation set for RON: {mae_ron:.4f}")
+    print(f"MAE score on the validation set for CN: {mae_cn:.4f}")
     print(f"Average MAE score on the validation set: {mae_overall:.4f}")
 
     print(f"\nMAPE score on the validation set for MON (percents): {mape_mon:.2f}")
     print(f"MAPE score on the validation set for RON (percents): {mape_ron:.2f}")
+    print(f"MAPE score on the validation set for CN (percents): {mape_cn:.2f}")
     print(f"Average MAPE score on the validation set: {mape_overall:.2f}")
 
     evaluation_metrics = {
         'R2_MON': float(r2_mon),
         'R2_RON': float(r2_ron),
+        'R2_CN': float(r2_cn),
         'R2_Overall': float(r2_overall),
         'MAE_MON': float(mae_mon),
         'MAE_RON': float(mae_ron),
+        'MAE_CN': float(mae_cn),
         'MAE_Overall': float(mae_overall),
         'MAPE_MON': float(mape_mon),
         'MAPE_RON': float(mape_ron),
+        'MAPE_CN': float(mape_cn),
         'MAPE_Overall': float(mape_overall),
         'SPLIT_RANDOM': split_random,
         'SEED': seed,
@@ -137,27 +152,43 @@ def evaluate_model(model, data_loader, device, split_random, seed, l2_reg_lambda
         'Predicted RON': predictions_ron
     })
 
-    plt.figure(figsize=(15, 6))
+    cn_plot_df = pd.DataFrame({
+    'Actual CN': actuals_cn,
+    'Predicted CN': predictions_cn
+})
 
-    plt.subplot(1, 2, 1)
+    plt.figure(figsize=(18, 6))
+
+    plt.subplot(1, 3, 1) # Changed to 1 row, 3 columns
     sns.scatterplot(x='Actual MON', y='Predicted MON', data=mon_plot_df)
     plt.plot([mon_plot_df['Actual MON'].min(), mon_plot_df['Actual MON'].max()],
-             [mon_plot_df['Actual MON'].min(), mon_plot_df['Actual MON'].max()],
-             'r--', label='Ideal Fit')
+            [mon_plot_df['Actual MON'].min(), mon_plot_df['Actual MON'].max()],
+            'r--', label='Ideal Fit')
     plt.title('MON: Predicted vs. Actual Values')
     plt.xlabel('Actual MON')
     plt.ylabel('Predicted MON')
     plt.legend()
     plt.grid(True)
 
-    plt.subplot(1, 2, 2)
+    plt.subplot(1, 3, 2) # Changed to 1 row, 3 columns
     sns.scatterplot(x='Actual RON', y='Predicted RON', data=ron_plot_df)
     plt.plot([ron_plot_df['Actual RON'].min(), ron_plot_df['Actual RON'].max()],
-             [ron_plot_df['Actual RON'].min(), ron_plot_df['Actual RON'].max()],
-             'r--', label='Ideal Fit')
+            [ron_plot_df['Actual RON'].min(), ron_plot_df['Actual RON'].max()],
+            'r--', label='Ideal Fit')
     plt.title('RON: Predicted vs. Actual Values')
     plt.xlabel('Actual RON')
     plt.ylabel('Predicted RON')
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(1, 3, 3) # Added subplot for CN
+    sns.scatterplot(x='Actual CN', y='Predicted CN', data=cn_plot_df)
+    plt.plot([cn_plot_df['Actual CN'].min(), cn_plot_df['Actual CN'].max()],
+             [cn_plot_df['Actual CN'].min(), cn_plot_df['Actual CN'].max()],
+             'r--', label='Ideal Fit')
+    plt.title('CN: Predicted vs. Actual Values')
+    plt.xlabel('Actual CN')
+    plt.ylabel('Predicted CN')
     plt.legend()
     plt.grid(True)
 

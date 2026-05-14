@@ -3,14 +3,14 @@ import scipy.optimize
 import numpy as np
 import torch
 import random
-
-def find_best_blend(target_ron, target_mon, available_smiles, smiles_map, descriptors_map, model, device, l1_molar_ratio_penalty=0.0):
+def find_best_blend(target_ron=None, target_mon=None, target_cn=None, available_smiles=None, smiles_map=None, descriptors_map=None, model=None, device=None, l1_molar_ratio_penalty=0.0):
     """
-    Finds the best fuel blend composition to match target RON and MON using optimization.
+    Finds the best fuel blend composition to match target RON, MON, and CN (with optional targets) using optimization.
 
     Args:
-        target_ron (float): Desired RON value.
-        target_mon (float): Desired MON value.
+        target_ron (float, optional): Desired RON value. If None, RON is not optimized.
+        target_mon (float, optional): Desired MON value. If None, MON is not optimized.
+        target_cn (float, optional): Desired CN value. If None, CN is not optimized.
         available_smiles (list): List of SMILES strings for pure components available for blending.
         smiles_map (dict): Pre-computed sparse vectors for SMILES strings.
         descriptors_map (dict): Pre-computed scaled descriptors for SMILES strings.
@@ -19,9 +19,12 @@ def find_best_blend(target_ron, target_mon, available_smiles, smiles_map, descri
         l1_molar_ratio_penalty (float): Strength of L1 regularization on molar fractions to encourage sparsity.
 
     Returns:
-        tuple: (optimal_composition_dict, predicted_ron, predicted_mon, final_loss)
-               Returns (None, None, None, None) if optimization fails.
+        tuple: (optimal_composition_dict, predicted_ron, predicted_mon, predicted_cn, final_loss)
+               Returns (None, None, None, None, None) if optimization fails.
     """
+
+    if available_smiles is None or len(available_smiles) == 0:
+        return None, None, None, None, None
 
     num_components = len(available_smiles)
 
@@ -33,7 +36,7 @@ def find_best_blend(target_ron, target_mon, available_smiles, smiles_map, descri
 
     def predict_properties_for_blend(molar_fractions_np):
         """
-        Internal function to predict RON/MON for a given blend composition.
+        Internal function to predict MON/RON/CN for a given blend composition.
         Takes numpy array of molar fractions, returns numpy array of predictions.
         """
         molar_fractions_tensor = torch.FloatTensor(molar_fractions_np).unsqueeze(1).to(device) # Shape (num_components, 1)
@@ -48,20 +51,22 @@ def find_best_blend(target_ron, target_mon, available_smiles, smiles_map, descri
                 molar_fractions_tensor,
                 blend_indices_tensor
             )
-            # Predictions are [MON, RON] based on BlendDataset target order
+            # Predictions are [MON, RON, CN] based on BlendDataset target order
             return predictions.cpu().squeeze().numpy()
 
     def objective_function(molar_fractions_np):
         """
         Objective function to minimize.
-        Calculates the squared error between predicted and target MON/RON,
-        plus an L1 regularization term on molar fractions for sparsity.
+        Calculates the squared error between predicted and target MON/RON/CN
+        for the specified targets, plus an L1 regularization term on molar fractions for sparsity.
         """
         predicted_properties = predict_properties_for_blend(molar_fractions_np)
-        predicted_mon, predicted_ron = predicted_properties[0], predicted_properties[1]
+        predicted_mon, predicted_ron, predicted_cn = predicted_properties[0], predicted_properties[1], predicted_properties[2]
 
-        # Mean Squared Error
-        loss = (target_mon - predicted_mon)**2 + (target_ron - predicted_ron)**2
+        loss = 0.0
+        if target_mon is not None: loss += (target_mon - predicted_mon)**2
+        if target_ron is not None: loss += (target_ron - predicted_ron)**2
+        if target_cn is not None: loss += (target_cn - predicted_cn)**2
 
         # L1 regularization on molar fractions to encourage sparsity
         l1_penalty = l1_molar_ratio_penalty * np.sum(np.abs(molar_fractions_np))
@@ -76,7 +81,7 @@ def find_best_blend(target_ron, target_mon, available_smiles, smiles_map, descri
     initial_guess = initial_guess / np.sum(initial_guess)
 
     bounds = [(min_molar_ratio, 1.0) for _ in range(num_components)]
-    constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0}) # Sum of molar fractions must be 1
+    constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
 
     result = scipy.optimize.minimize(
         objective_function,
@@ -88,26 +93,26 @@ def find_best_blend(target_ron, target_mon, available_smiles, smiles_map, descri
     )
 
     if result.success:
-        # Normalize result.x to ensure it sums to 1.0, accounting for potential minor floating point inaccuracies
         optimal_molar_fractions = result.x / np.sum(result.x)
         predicted_properties_optimal = predict_properties_for_blend(optimal_molar_fractions)
-        predicted_mon_optimal, predicted_ron_optimal = predicted_properties_optimal[0], predicted_properties_optimal[1]
+        predicted_mon_optimal, predicted_ron_optimal, predicted_cn_optimal = predicted_properties_optimal[0], predicted_properties_optimal[1], predicted_properties_optimal[2]
 
         optimal_composition_dict = {
             available_smiles[i]: frac for i, frac in enumerate(optimal_molar_fractions)
         }
-        return optimal_composition_dict, predicted_ron_optimal, predicted_mon_optimal, result.fun
+        return optimal_composition_dict, predicted_ron_optimal, predicted_mon_optimal, predicted_cn_optimal, result.fun
     else:
-        return None, None, None, None
+        return None, None, None, None, None
 
-def find_k_component_blend(target_ron, target_mon, k_components, all_available_smiles, smiles_map, descriptors_map, model, device, num_trials=100, molar_fraction_threshold=1e-4):
+def find_k_component_blend(target_ron=None, target_mon=None, target_cn=None, k_components=None, all_available_smiles=None, smiles_map=None, descriptors_map=None, model=None, device=None, num_trials=100, molar_fraction_threshold=1e-4):
     """
     Finds the best fuel blend composition with exactly 'k_components' components
-    by performing a stochastic search and optimization.
+    by performing a stochastic search and optimization, with optional target properties.
 
     Args:
-        target_ron (float): Desired RON value.
-        target_mon (float): Desired MON value.
+        target_ron (float, optional): Desired RON value. If None, RON is not optimized.
+        target_mon (float, optional): Desired MON value. If None, MON is not optimized.
+        target_cn (float, optional): Desired CN value. If None, CN is not optimized.
         k_components (int): The desired number of components in the final blend.
         all_available_smiles (list): List of all possible SMILES strings for pure components.
         smiles_map (dict): Pre-computed sparse vectors for SMILES strings.
@@ -118,20 +123,21 @@ def find_k_component_blend(target_ron, target_mon, k_components, all_available_s
         molar_fraction_threshold (float): Minimum molar fraction to consider a component "present".
 
     Returns:
-        tuple: (optimal_composition_dict, predicted_ron, predicted_mon, final_loss)
-               Returns (None, None, None, None) if no successful blend is found.
+        tuple: (optimal_composition_dict, predicted_ron, predicted_mon, predicted_cn, final_loss)
+               Returns (None, None, None, None, None) if no successful blend is found.
     """
     best_overall_loss = float('inf')
     best_overall_composition = None
     best_overall_pred_ron = None
     best_overall_pred_mon = None
+    best_overall_pred_cn = None
 
-    if k_components <= 0:
+    if k_components is None or k_components <= 0:
         print("Number of components (k) must be positive.")
-        return None, None, None, None
-    if k_components > len(all_available_smiles):
-        print(f"Cannot select {k_components} components from a pool of {len(all_available_smiles)} available SMILES.")
-        return None, None, None, None
+        return None, None, None, None, None
+    if all_available_smiles is None or k_components > len(all_available_smiles):
+        print(f"Cannot select {k_components} components from a pool of {len(all_available_smiles) if all_available_smiles else 0} available SMILES.")
+        return None, None, None, None, None
 
     model.eval()
 
@@ -148,14 +154,8 @@ def find_k_component_blend(target_ron, target_mon, k_components, all_available_s
 
         # Optimize molar fractions for this subset using find_best_blend with L1_molar_ratio_penalty=0.0
         # because we are *fixing* the number of components, not encouraging sparsity.
-        optimal_composition_dict, pred_ron, pred_mon, current_loss = find_best_blend(
-            target_ron,
-            target_mon,
-            current_smiles_subset,
-            smiles_map,
-            descriptors_map,
-            model,
-            device,
+        optimal_composition_dict, pred_ron, pred_mon, pred_cn, current_loss = find_best_blend(
+            target_ron, target_mon, target_cn, current_smiles_subset, smiles_map, descriptors_map, model, device,
             l1_molar_ratio_penalty=0.0 # No L1 penalty when k components are already chosen
         )
 
@@ -163,13 +163,14 @@ def find_k_component_blend(target_ron, target_mon, k_components, all_available_s
             best_overall_loss = current_loss
             best_overall_pred_ron = pred_ron
             best_overall_pred_mon = pred_mon
+            best_overall_pred_cn = pred_cn
             best_overall_composition = {
                 s: f for s, f in optimal_composition_dict.items() if f > molar_fraction_threshold
             }
 
     if best_overall_composition:
         print(f"Stochastic search complete. Best blend found with a loss of {best_overall_loss:.4f}.")
-        return best_overall_composition, best_overall_pred_ron, best_overall_pred_mon, best_overall_loss
+        return best_overall_composition, best_overall_pred_ron, best_overall_pred_mon, best_overall_pred_cn, best_overall_loss
     else:
         print("Stochastic search completed, but no successful blend was found.")
-        return None, None, None, None
+        return None, None, None, None, None

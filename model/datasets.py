@@ -19,7 +19,7 @@ class BlendDataset(Dataset):
         # Ensure MON and RON values are floats and handle NaNs
         # In `data_preprocessing.py`, NaNs in MON/RON will be handled before dataset creation.
         # For now, `np.nan_to_num` is kept for robustness, assuming inputs might still contain NaNs.
-        mon_ron_values = blend_row[['MON', 'RON']].values.astype(np.float32)
+        mon_ron_values = blend_row[['MON', 'RON','CN']].values.astype(np.float32)
         mon_ron_values = np.nan_to_num(mon_ron_values, nan=0.0)
         target_mon_ron = torch.FloatTensor(mon_ron_values)
 

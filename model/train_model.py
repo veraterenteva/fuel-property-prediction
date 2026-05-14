@@ -29,9 +29,9 @@ project_root = str(pathlib.Path.cwd())
 
 df_pure = pd.read_csv(project_root + '/data/pure_for_mix.csv')
 
-df_mix = pd.read_csv(project_root + '/data/mix_combined.csv')
+df_mix = pd.read_csv(project_root + '/data/mix_combined_cn.csv')
 
-not_smiles = ('index','Mixture name','Dataset','RON','MON')
+not_smiles = ('index','Mixture name','Dataset','RON','MON','CN')
 all_smiles_in_mix = list(filter(lambda x: x not in not_smiles, df_mix.columns))
 
 print(f"Loaded {len(df_pure)} pure components and {len(df_mix)} mixture entries.")
