@@ -169,12 +169,12 @@
 
             {% if forward_result.invalid_smiles %}
 
-                <p><b>Invalid SMILES:</b></p>
-                <ul>
-                    {% for s in forward_result.invalid_smiles %}
-                        <li>{{ s }}</li>
-                    {% endfor %}
-                </ul>
+            <p><b>Invalid SMILES:</b></p>
+            <ul>
+                {% for s in forward_result.invalid_smiles %}
+                <li>{{ s }}</li>
+                {% endfor %}
+            </ul>
 
             {% endif %}
 
@@ -222,11 +222,21 @@
             ⏳ Please wait, optimizing blend...
         </div>
 
-        {% if inverse_result %}
+        {% if inverse_result and inverse_result.error %}
+        <div class="error-box">
+            <b>Server error:</b>
+            <p>{{ inverse_result.error }}</p>
+        </div>
+        {% endif %}
+
+
+        {% if inverse_result and inverse_result.error is not defined %}
         <div class="result">
+
             <p>RON: {{ inverse_result.predicted_RON }}</p>
             <p>MON: {{ inverse_result.predicted_MON }}</p>
             <p>CN: {{ inverse_result.predicted_CN }}</p>
+
             <p><b>Loss:</b> {{ inverse_result.loss }}</p>
 
             <ul>
@@ -234,6 +244,7 @@
                 <li>{{ c.smiles }} — {{ c.fraction }}</li>
                 {% endfor %}
             </ul>
+
         </div>
         {% endif %}
 
@@ -242,107 +253,107 @@
 </div>
 
 <script>
-let index = 0;
+    let index = 0;
 
-function showPopup(msg, isError=false){
-    const p = document.getElementById("popup");
-    p.innerText = msg;
-    p.className = "popup show" + (isError ? " error" : "");
-    setTimeout(()=>p.classList.remove("show"), 3000);
-}
-
-function addComponent(smiles="", fraction="") {
-
-    const div = document.createElement("div");
-    div.className = "row";
-    div.dataset.index = index;
-
-    div.innerHTML = `
-        <input name="smiles_${index}" placeholder="SMILES" value="${smiles}">
-        <input name="fraction_${index}" placeholder="Fraction" value="${fraction}">
-        <button type="button" class="danger" onclick="removeComponent(this)">X</button>
-    `;
-
-    document.getElementById("components").appendChild(div);
-
-    index++;
-}
-
-function removeComponent(btn){
-
-    const container = document.getElementById("components");
-
-    if(container.children.length === 1){
-        showPopup("You should provide at least 1 SMILES for prediction!", true);
-        return;
+    function showPopup(msg, isError=false){
+        const p = document.getElementById("popup");
+        p.innerText = msg;
+        p.className = "popup show" + (isError ? " error" : "");
+        setTimeout(()=>p.classList.remove("show"), 3000);
     }
 
-    btn.parentElement.remove();
-}
+    function addComponent(smiles="", fraction="") {
 
-// init
-addComponent();
+        const div = document.createElement("div");
+        div.className = "row";
+        div.dataset.index = index;
 
-// normalize decimal comma
-function normalize(value){
-    return value.replace(",", ".");
-}
+        div.innerHTML = `
+            <input name="smiles_${index}" placeholder="SMILES" value="${smiles}">
+            <input name="fraction_${index}" placeholder="Fraction" value="${fraction}">
+            <button type="button" class="danger" onclick="removeComponent(this)">X</button>
+        `;
 
-// validate before submit
-document.getElementById("blendForm").addEventListener("submit", function(e){
+        document.getElementById("components").appendChild(div);
 
-    const rows = document.querySelectorAll(".row");
+        index++;
+    }
 
-    let blend = [];
-    let sum = 0;
+    function removeComponent(btn){
 
-    let errors = [];
+        const container = document.getElementById("components");
 
-    rows.forEach(r => {
-
-        let sm = r.children[0].value.trim();
-        let fr = normalize(r.children[1].value.trim());
-
-        if(!sm){
-            errors.push("Empty SMILES");
+        if(container.children.length === 1){
+            showPopup("You should provide at least 1 SMILES for prediction!", true);
+            return;
         }
 
-        if(isNaN(fr) || fr === ""){
-            errors.push("Incorrect fraction provided");
+        btn.parentElement.remove();
+    }
+
+    // init
+    addComponent();
+
+    // normalize decimal comma
+    function normalize(value){
+        return value.replace(",", ".");
+    }
+
+    // validate before submit
+    document.getElementById("blendForm").addEventListener("submit", function(e){
+
+        const rows = document.querySelectorAll(".row");
+
+        let blend = [];
+        let sum = 0;
+
+        let errors = [];
+
+        rows.forEach(r => {
+
+            let sm = r.children[0].value.trim();
+            let fr = normalize(r.children[1].value.trim());
+
+            if(!sm){
+                errors.push("Empty SMILES");
+            }
+
+            if(isNaN(fr) || fr === ""){
+                errors.push("Incorrect fraction provided");
+            }
+
+            fr = parseFloat(fr);
+
+            blend.push({smiles: sm, fraction: fr});
+            sum += fr;
+
+        });
+
+        if(errors.length){
+            e.preventDefault();
+            showPopup(errors.join(" | "), true);
+            return;
         }
 
-        fr = parseFloat(fr);
+        if(Math.abs(sum - 1.0) > 0.05){
+            e.preventDefault();
+            showPopup("Sum of mole fractions ≠ 1.0", true);
+            return;
+        }
 
-        blend.push({smiles: sm, fraction: fr});
-        sum += fr;
+        let hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = "blend";
+        hidden.value = JSON.stringify(blend);
+
+        this.appendChild(hidden);
 
     });
 
-    if(errors.length){
-        e.preventDefault();
-        showPopup(errors.join(" | "), true);
-        return;
-    }
-
-    if(Math.abs(sum - 1.0) > 0.05){
-        e.preventDefault();
-        showPopup("Sum of mole fractions ≠ 1.0", true);
-        return;
-    }
-
-    let hidden = document.createElement("input");
-    hidden.type = "hidden";
-    hidden.name = "blend";
-    hidden.value = JSON.stringify(blend);
-
-    this.appendChild(hidden);
-
-});
-
-// inverse loading
-document.getElementById("inverseForm").addEventListener("submit", function(){
-    document.getElementById("loading").style.display = "block";
-});
+    // inverse loading
+    document.getElementById("inverseForm").addEventListener("submit", function(){
+        document.getElementById("loading").style.display = "block";
+    });
 </script>
 
 </body>

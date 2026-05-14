@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import FastAPI
 from fastapi import Request
 from fastapi import Form
@@ -23,11 +25,6 @@ def home(request:Request):
         }
     )
 
-@app.post(
-    "/predict",
-    response_class=HTMLResponse
-)
-
 @app.post("/predict")
 def predict(request: Request, blend: str = Form(...)):
     try:
@@ -51,26 +48,70 @@ def predict(request: Request, blend: str = Form(...)):
             }
         )
 
-@app.post(
-    "/inverse",
-    response_class=HTMLResponse
-)
-
+@app.post("/inverse", response_class=HTMLResponse)
 def inverse(
-    request:Request,
-    ron:float=Form(...),
-    mon:float=Form(...),
-    cn: float=Form(...),
-    k:int=Form(4)
+    request: Request,
+    ron: Optional[float] = Form(None),
+    mon: Optional[float] = Form(None),
+    cn: Optional[float] = Form(None),
+    k: int = Form(4)
 ):
-    result=(model.get_mixture_from_properties(ron, mon, cn, k))
+
+    targets = {
+        "ron": ron,
+        "mon": mon,
+        "cn": cn
+    }
+
+    # Хотя бы одно значение должно быть задано
+    if all(v is None for v in targets.values()):
+        return templates.TemplateResponse(
+            "index.html",
+            {
+                "request": request,
+                "inverse_result": {
+                    "error": "At least one of RON, MON, CN must be provided"
+                }
+            }
+        )
+
+    # Диапазоны величин
+    def validate(name, value, min_v, max_v):
+        if value is None:
+            return None
+        if not (min_v <= value <= max_v):
+            raise ValueError(
+                f"{name} must be in range [{min_v}, {max_v}]"
+            )
+        return value
+
+    try:
+        ron = validate("RON", ron, 0, 120)
+        mon = validate("MON", mon, 0, 120)
+        cn  = validate("CN", cn, 0, 100)
+
+    except ValueError as e:
+        return templates.TemplateResponse(
+            "index.html",
+            {
+                "request": request,
+                "inverse_result": {
+                    "error": str(e)
+                }
+            }
+        )
+
+    result = model.get_mixture_from_properties(
+        ron,
+        mon,
+        cn,
+        k
+    )
 
     return templates.TemplateResponse(
         "index.html",
         {
-            "request":
-            request,
-            "inverse_result":
-            result
+            "request": request,
+            "inverse_result": result
         }
     )
