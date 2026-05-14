@@ -24,7 +24,7 @@ class FuelModel:
 
         self.df_mix = pd.read_csv("data/mix_combined_cn.csv")
 
-        not_smiles = ("index", "Mixture name", "Dataset", "RON", "MON")
+        not_smiles = ("index", "Mixture name", "Dataset", "RON", "MON", "CN")
 
         self.all_smiles = list(
             filter(lambda x: x not in not_smiles, self.df_mix.columns)
@@ -174,17 +174,19 @@ class FuelModel:
 
         return {
             "MON": float(prediction[0]),
-            "RON": float(prediction[1])
+            "RON": float(prediction[1]),
+            "CN": float(prediction[2])
         }
 
     # Inverse problem
     def get_mixture_from_properties(
-            self, target_ron, target_mon, k=4, num_trials=100
+            self, target_ron, target_mon, target_cn, k=4, num_trials=100
     ):
 
-        (composition, pred_ron, pred_mon, loss) = find_k_component_blend(
+        (composition, pred_ron, pred_mon, pred_cn, loss) = find_k_component_blend(
             target_ron=target_ron,
             target_mon=target_mon,
+            target_cn=target_cn,
             k_components=k,
             all_available_smiles=self.all_smiles,
             smiles_map=self.smiles_map,
@@ -205,6 +207,7 @@ class FuelModel:
         return {
             "predicted_RON": float(pred_ron),
             "predicted_MON": float(pred_mon),
+            "predicted_CN": float(pred_cn),
             "loss": float(loss),
             "blend": blend,
         }

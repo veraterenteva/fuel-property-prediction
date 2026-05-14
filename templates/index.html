@@ -186,6 +186,7 @@
         <div class="result">
             <p>MON: <b>{{ forward_result.MON }}</b></p>
             <p>RON: <b>{{ forward_result.RON }}</b></p>
+            <p>CN: <b>{{ forward_result.CN }}</b></p>
         </div>
         {% endif %}
 
@@ -207,6 +208,9 @@
             <label>Target MON</label>
             <input name="mon" type="number" step="0.1">
 
+            <label>Target CN</label>
+            <input name="cn" type="number" step="0.1">
+
             <label>K components</label>
             <input name="k" type="number" value="4">
 
@@ -222,6 +226,7 @@
         <div class="result">
             <p>RON: {{ inverse_result.predicted_RON }}</p>
             <p>MON: {{ inverse_result.predicted_MON }}</p>
+            <p>CN: {{ inverse_result.predicted_CN }}</p>
             <p><b>Loss:</b> {{ inverse_result.loss }}</p>
 
             <ul>
@@ -268,7 +273,7 @@ function removeComponent(btn){
     const container = document.getElementById("components");
 
     if(container.children.length === 1){
-        showPopup("Нельзя удалить последнюю компоненту", true);
+        showPopup("You should provide at least 1 SMILES for prediction!", true);
         return;
     }
 
@@ -299,11 +304,11 @@ document.getElementById("blendForm").addEventListener("submit", function(e){
         let fr = normalize(r.children[1].value.trim());
 
         if(!sm){
-            errors.push("Пустой SMILES");
+            errors.push("Empty SMILES");
         }
 
         if(isNaN(fr) || fr === ""){
-            errors.push("Некорректная доля");
+            errors.push("Incorrect fraction provided");
         }
 
         fr = parseFloat(fr);
@@ -321,7 +326,7 @@ document.getElementById("blendForm").addEventListener("submit", function(e){
 
     if(Math.abs(sum - 1.0) > 0.05){
         e.preventDefault();
-        showPopup("Сумма мольных долей ≠ 1.0", true);
+        showPopup("Sum of mole fractions ≠ 1.0", true);
         return;
     }
 

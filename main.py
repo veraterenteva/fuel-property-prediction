@@ -60,9 +60,10 @@ def inverse(
     request:Request,
     ron:float=Form(...),
     mon:float=Form(...),
+    cn: float=Form(...),
     k:int=Form(4)
 ):
-    result=(model.get_mixture_from_properties(ron, mon, k))
+    result=(model.get_mixture_from_properties(ron, mon, cn, k))
 
     return templates.TemplateResponse(
         "index.html",
