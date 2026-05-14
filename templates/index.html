@@ -2,68 +2,343 @@
 <html>
 <head>
     <title>Fuel AI Designer</title>
+
     <link rel="stylesheet" href="/static/style.css">
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border-radius: 6px;
+            border: none;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .row input {
+            flex: 1;
+        }
+
+        button {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background: #38bdf8;
+            color: black;
+            font-weight: bold;
+        }
+
+        button.danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #0f172a;
+            border-radius: 8px;
+        }
+
+        .hint {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 8px;
+        }
+
+        /* popup */
+        .popup {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #111827;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border-left: 4px solid #38bdf8;
+            display: none;
+            z-index: 999;
+        }
+
+        .popup.error {
+            border-left-color: #ef4444;
+        }
+
+        .popup.show {
+            display: block;
+        }
+
+        /* loading */
+        .loading {
+            display: none;
+            margin-top: 10px;
+            color: #fbbf24;
+        }
+
+        /* server error block */
+        .error-box {
+            margin-top: 10px;
+            padding: 10px;
+            background: #450a0a;
+            border-left: 4px solid #ef4444;
+            border-radius: 8px;
+        }
+
+    </style>
 </head>
+
 <body>
 
 <div class="container">
 
     <h1>🚀 Fuel AI Designer</h1>
 
+    <div class="popup" id="popup"></div>
+
+    <!-- ===================== -->
+    <!-- FORWARD -->
+    <!-- ===================== -->
     <div class="card">
+
         <h2>Forward Prediction</h2>
 
-        <form action="/predict" method="post">
-            <label>SMILES:</label>
-            <input name="smiles" placeholder="e.g. CCO">
+        <p class="hint">
+            Add components (SMILES + mole fraction). '.' and ',' are supported as decimal separators.
+            The sum of the fractions must be equal to 1.0.
+        </p>
 
-            <label>Blend (JSON):</label>
-            <textarea name="blend" placeholder='[{"smiles":"CCO","fraction":0.5},{"smiles":"CCCC","fraction":0.5}]'></textarea>
+        <form id="blendForm" action="/predict" method="post">
 
-            <button type="submit">Predict</button>
+            <div id="components"></div>
+
+            <button type="button" onclick="addComponent()">
+                + Add component
+            </button>
+
+            <button type="submit">
+                Predict
+            </button>
+
         </form>
 
-        {% if forward_result %}
+        {% if forward_result and forward_result.error %}
+
+        <div class="error-box">
+
+            <b>Server error:</b>
+            <p>{{ forward_result.error }}</p>
+
+            {% if forward_result.invalid_smiles %}
+
+                <p><b>Invalid SMILES:</b></p>
+                <ul>
+                    {% for s in forward_result.invalid_smiles %}
+                        <li>{{ s }}</li>
+                    {% endfor %}
+                </ul>
+
+            {% endif %}
+
+        </div>
+
+        {% endif %}
+
+        {% if forward_result and not forward_result.error %}
         <div class="result">
-            <h3>Result:</h3>
-            <p>Octane: {{ forward_result.octane_number }}</p>
-            <p>Cetane: {{ forward_result.cetane_number }}</p>
-            <p>Flash Point: {{ forward_result.flash_point }}</p>
+            <p>MON: <b>{{ forward_result.MON }}</b></p>
+            <p>RON: <b>{{ forward_result.RON }}</b></p>
         </div>
         {% endif %}
+
     </div>
 
 
+    <!-- ===================== -->
+    <!-- INVERSE -->
+    <!-- ===================== -->
     <div class="card">
+
         <h2>Inverse Design</h2>
 
-        <form action="/inverse" method="post">
-            <label>Octane:</label>
-            <input name="octane" type="number" step="0.1">
+        <form id="inverseForm" action="/inverse" method="post">
 
-            <label>Cetane:</label>
-            <input name="cetane" type="number" step="0.1">
+            <label>Target RON</label>
+            <input name="ron" type="number" step="0.1">
 
-            <label>Flash Point:</label>
-            <input name="flash_point" type="number" step="0.1">
+            <label>Target MON</label>
+            <input name="mon" type="number" step="0.1">
 
-            <button type="submit">Generate Mixture</button>
+            <label>K components</label>
+            <input name="k" type="number" value="4">
+
+            <button type="submit">Generate</button>
+
         </form>
+
+        <div class="loading" id="loading">
+            ⏳ Please wait, optimizing blend...
+        </div>
 
         {% if inverse_result %}
         <div class="result">
-            <h3>Suggested Blend:</h3>
+            <p>RON: {{ inverse_result.predicted_RON }}</p>
+            <p>MON: {{ inverse_result.predicted_MON }}</p>
+            <p><b>Loss:</b> {{ inverse_result.loss }}</p>
 
             <ul>
-                {% for comp in inverse_result.blend %}
-                <li>{{ comp.smiles }} — {{ comp.fraction }}</li>
+                {% for c in inverse_result.blend %}
+                <li>{{ c.smiles }} — {{ c.fraction }}</li>
                 {% endfor %}
             </ul>
         </div>
         {% endif %}
+
     </div>
 
 </div>
+
+<script>
+let index = 0;
+
+function showPopup(msg, isError=false){
+    const p = document.getElementById("popup");
+    p.innerText = msg;
+    p.className = "popup show" + (isError ? " error" : "");
+    setTimeout(()=>p.classList.remove("show"), 3000);
+}
+
+function addComponent(smiles="", fraction="") {
+
+    const div = document.createElement("div");
+    div.className = "row";
+    div.dataset.index = index;
+
+    div.innerHTML = `
+        <input name="smiles_${index}" placeholder="SMILES" value="${smiles}">
+        <input name="fraction_${index}" placeholder="Fraction" value="${fraction}">
+        <button type="button" class="danger" onclick="removeComponent(this)">X</button>
+    `;
+
+    document.getElementById("components").appendChild(div);
+
+    index++;
+}
+
+function removeComponent(btn){
+
+    const container = document.getElementById("components");
+
+    if(container.children.length === 1){
+        showPopup("Нельзя удалить последнюю компоненту", true);
+        return;
+    }
+
+    btn.parentElement.remove();
+}
+
+// init
+addComponent();
+
+// normalize decimal comma
+function normalize(value){
+    return value.replace(",", ".");
+}
+
+// validate before submit
+document.getElementById("blendForm").addEventListener("submit", function(e){
+
+    const rows = document.querySelectorAll(".row");
+
+    let blend = [];
+    let sum = 0;
+
+    let errors = [];
+
+    rows.forEach(r => {
+
+        let sm = r.children[0].value.trim();
+        let fr = normalize(r.children[1].value.trim());
+
+        if(!sm){
+            errors.push("Пустой SMILES");
+        }
+
+        if(isNaN(fr) || fr === ""){
+            errors.push("Некорректная доля");
+        }
+
+        fr = parseFloat(fr);
+
+        blend.push({smiles: sm, fraction: fr});
+        sum += fr;
+
+    });
+
+    if(errors.length){
+        e.preventDefault();
+        showPopup(errors.join(" | "), true);
+        return;
+    }
+
+    if(Math.abs(sum - 1.0) > 0.05){
+        e.preventDefault();
+        showPopup("Сумма мольных долей ≠ 1.0", true);
+        return;
+    }
+
+    let hidden = document.createElement("input");
+    hidden.type = "hidden";
+    hidden.name = "blend";
+    hidden.value = JSON.stringify(blend);
+
+    this.appendChild(hidden);
+
+});
+
+// inverse loading
+document.getElementById("inverseForm").addEventListener("submit", function(){
+    document.getElementById("loading").style.display = "block";
+});
+</script>
 
 </body>
 </html>
